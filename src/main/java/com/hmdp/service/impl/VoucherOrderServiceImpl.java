@@ -2,22 +2,21 @@ package com.hmdp.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.dto.Result;
-import com.hmdp.entity.SeckillVoucher;
 import com.hmdp.entity.VoucherOrder;
 import com.hmdp.mapper.VoucherOrderMapper;
 import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherOrderService;
 import com.hmdp.utils.RedisIDWorker;
 import com.hmdp.utils.UserHolder;
-import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
-import org.springframework.aop.framework.AopContext;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
-import java.time.LocalDateTime;
+import java.util.Collections;
 
 /**
  * <p>
@@ -41,6 +40,36 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
     @Resource
     private RedissonClient redissonClient;
+
+    private static final DefaultRedisScript<Long> SECKILL_SCRIPT;
+
+    static {
+        SECKILL_SCRIPT = new DefaultRedisScript<>();
+        SECKILL_SCRIPT.setLocation(new ClassPathResource("seckill.lua"));
+        SECKILL_SCRIPT.setResultType(Long.class);
+    }
+
+    @Override
+    public Result secKill(Long voucherId) {
+        Long userId = UserHolder.getUser().getId();
+        Long result = stringRedisTemplate.execute(
+                SECKILL_SCRIPT,
+                Collections.emptyList(),
+                voucherId.toString(),
+                userId.toString()
+        );
+        int re = result != null ? result.intValue() : 1;
+        if (re != 0){
+            return Result.fail(re == 1 ? "库存不足" : "一人只能一单！");
+        }
+        // 2.2 re==0表示有资格,保存到阻塞队列中让数据库进行异步处理
+        long order = redisIDWorker.nextId("order");
+        // TODO 保存到阻塞队列里
+
+        return Result.ok(order);
+    }
+
+/*
 
     @Override
     public Result secKill(Long voucherId) {
@@ -77,7 +106,8 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         }
 
 //        此处是不使用redis对每人一单的业务进行的一个事务管理和加锁操作。
-        /*
+        */
+/*
         synchronized (userId.toString().intern()){
             //在方法调用之前加锁可以保证在事务执行之后再释放锁,可能在数据库数据提交之前有新线程进来进行订单查询,此时订单数据未提交，导致一人两票。
             //给userid加锁可以保证同一个用户id才会进行串行,这样保证了运行效率,也保证了每人一单的安全性。
@@ -86,18 +116,15 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
             return proxy.CreateVoucherOrder(voucherId);
         }
-        */
+        *//*
+
     }
+*/
 
 
     @Transactional
     public Result CreateVoucherOrder(Long voucherId) {
-        //每人一单
         Long userId = UserHolder.getUser().getId();
-        int count = query().eq("user_id", userId).eq("voucher_id", voucherId).count();
-        if (count == 1){
-            return Result.fail("每人仅限一单！");
-        }
         //扣减库存
         boolean success = seckillVoucherService.update()
                 .setSql("stock = stock - 1")//set stock = stock - 1
