@@ -39,7 +39,7 @@ public class CacheClientUtil {
     }
 
     /**
-     * 解决缓存穿透
+     * 通过redis存储空置来解决缓存穿透
      */
     public <R,ID> R queryWithPassThrough(String prefix, ID id, Class<R> type, Function<ID,R> dbFallBack,Long time,TimeUnit unit) {
         String key = prefix + id;
@@ -66,7 +66,7 @@ public class CacheClientUtil {
     }
 
     /**
-     * 逻辑过期解决缓存穿透,默认一定在缓存中,一般先手动载入缓存。
+     * 逻辑过期解决缓存击穿,默认一定在缓存中,一般先手动载入缓存。
      */
     public <R,ID> R queryWithLogicExpire(String prefix,String lockPrefix,Function<ID,R> dbFallBack,ID id,Class<R> type,Long time,TimeUnit unit) {
         String key = prefix + id;
@@ -97,7 +97,7 @@ public class CacheClientUtil {
     }
 
     /**
-     * 互斥锁解决缓存穿透
+     * 互斥锁解决缓存击穿
      */
     public <R,ID> R queryWithMutex(String prefix,String lockPrefix,ID id,Class<R> type,Function<ID,R> dbFallBack,
                                    Long nullTime,TimeUnit nullUnit,Long dataTime,TimeUnit dataUnit) {

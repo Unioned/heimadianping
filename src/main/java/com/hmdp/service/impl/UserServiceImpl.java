@@ -12,6 +12,7 @@ import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.RegexUtils;
+import com.hmdp.utils.SendPhoneMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -55,13 +56,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         //验证码存redis
         stringTemplate.opsForValue().set(LOGIN_CODE_KEY + phone,code,LOGIN_CODE_TTL, TimeUnit.MINUTES);
         //发送
-//        String sendText = "欢迎使用黑马点评,您本次验证码为："+code+"，有效期为三分钟。";
-//        try{
-//            boolean send = SendMailTool.TextMailBySMTPQQ("2314383370@qq.com",
-//                    "hemrwikkegymecfd", phone, sendText);
-//        }catch (MessagingException me){
-//            return Result.fail("很抱歉，服务器似乎无响应,请尝试重新发送");
-//        }
+        boolean sendSuccess = SendPhoneMessage.SendMessage(phone,code);
+        if (!sendSuccess){
+            return Result.fail("服务器异常,请稍后重新发送验证码");
+        }
         log.debug("发送成功，验证码为{}",code);
         return Result.ok();
     }
@@ -70,21 +68,23 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     public Result login(LoginFormDTO loginForm, HttpSession session) {
         //校验手机号
         String phone = loginForm.getPhone();
+//        session方式进行校验
 //        String sessionPhone = session.getAttribute("phone").toString();
 //        if (phone == null || !phone.equals(sessionPhone)){
 //            return Result.fail("手机号格式或内容不符");
 //        }
         if (RegexUtils.isPhoneInvalid(phone)){
-            return Result.fail("手机号错误");
+            return Result.fail("手机号格式或内容不符");
         }
         //校验验证码
         String code = loginForm.getCode();
+//        session方式进行校验
 //        String validCode = session.getAttribute("code").toString();
+        //通过手机号在redis中获取验证码
         String validCode = stringTemplate.opsForValue().get(LOGIN_CODE_KEY + phone);
         if (code == null || !code.equals(validCode)){
             return Result.fail("验证码错误!");
         }
-        //通过手机号在redis中获取验证码
         //查询用户
         User user = query().eq("phone", phone).one();
         //判断新老用户

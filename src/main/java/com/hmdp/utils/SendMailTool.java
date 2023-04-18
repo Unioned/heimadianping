@@ -15,7 +15,7 @@ public class SendMailTool {
 
     private static MimeMessage message = null;
     private static Session session = null;
-    //工具类,不需要实例化类,私有化是该类不能实例化。
+    //工具类,不需要实例化类,私有化使该类不能实例化。
 
     private SendMailTool(){
     }

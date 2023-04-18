@@ -5,6 +5,7 @@ import com.hmdp.service.impl.ShopServiceImpl;
 import com.hmdp.utils.CacheClientUtil;
 import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.RedisIDWorker;
+import com.hmdp.utils.SendPhoneMessage;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -25,6 +26,13 @@ class HmDianPingApplicationTests {
     @Resource
     RedisIDWorker redisIDWorker;
 
+    @Test
+    void sendMessage() {
+        String phone = "18374894528";
+        String code = "784264";
+        boolean isSuccess = SendPhoneMessage.SendMessage(phone, code);
+        System.out.println(isSuccess);
+    }
     @Test
     void saveShopToRedisTest(){
         Shop shop = shopService.getById(1L);
