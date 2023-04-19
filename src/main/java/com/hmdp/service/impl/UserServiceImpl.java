@@ -58,6 +58,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         //发送
         boolean sendSuccess = SendPhoneMessage.SendMessage(phone,code);
         if (!sendSuccess){
+            log.error("验证码发送操作出现异常");
             return Result.fail("服务器异常,请稍后重新发送验证码");
         }
         log.debug("发送成功，验证码为{}",code);
