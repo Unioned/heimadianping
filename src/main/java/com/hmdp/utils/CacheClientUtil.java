@@ -39,7 +39,7 @@ public class CacheClientUtil {
     }
 
     /**
-     * 通过redis存储空置来解决缓存穿透
+     * 通过redis存储空值来解决缓存穿透
      */
     public <R,ID> R queryWithPassThrough(String prefix, ID id, Class<R> type, Function<ID,R> dbFallBack,Long time,TimeUnit unit) {
         String key = prefix + id;
@@ -70,20 +70,34 @@ public class CacheClientUtil {
      */
     public <R,ID> R queryWithLogicExpire(String prefix,String lockPrefix,Function<ID,R> dbFallBack,ID id,Class<R> type,Long time,TimeUnit unit) {
         String key = prefix + id;
+        //从Redis获取缓存
         String json = stringRedisTemplate.opsForValue().get(key);
         //判断缓存是否命中
         if (StrUtil.isBlank(json)){
             return null;
         }
+        //将json格式转化为redisData类型
         RedisData redisData = JSONUtil.toBean(json, RedisData.class);
+        //将对象转化为需要的对象格式
         R r = JSONUtil.toBean((JSONObject) redisData.getData(), type);
+        //得到过期时间
         LocalDateTime expireTime = redisData.getExpireTime();
+        //时间未过期
         if (expireTime.isAfter(LocalDateTime.now())){
             return r;
         }
+        //否则，时间过期，需要进行时间刷新，缓存更新
         String lockKey = lockPrefix + id;
+        //获取互斥锁
         boolean isLock = tryLock(lockKey);
+
         if (isLock){
+            //双检，防止多次重建
+            if (expireTime.isAfter(LocalDateTime.now())){
+                UnLock(lockKey);
+                return r;
+            }
+            //新建线程进行缓存重建
             CACHE_REBUILD_EXECUTOR.submit(() -> {
                 try {
                     R rr = dbFallBack.apply(id);
@@ -104,10 +118,11 @@ public class CacheClientUtil {
         String key = prefix + id;
         String json = stringRedisTemplate.opsForValue().get(key);
         //判断缓存是否命中
-        if (StrUtil.isNotBlank(json)){//判断null或者空字符串
+        if (StrUtil.isNotBlank(json)){//判断不为null或者空字符串
             //命中,直接从redis缓存返回数据
             return JSONUtil.toBean(json, type);
         }
+        //数据为空
         if(json != null){
             return null;
         }

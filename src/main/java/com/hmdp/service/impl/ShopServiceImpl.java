@@ -35,7 +35,9 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     @Override
     public Result queryById(Long id) {
         //从redis缓存查询信息
+//        redis存储空值解决
 //        Shop shop = cacheClientUtil.queryWithPassThrough(CACHE_SHOP_KEY,id,Shop.class,this::getById, CACHE_SHOP_TTL,TimeUnit.MINUTES);
+//        逻辑过期
 //        Shop shop = cacheClientUtil.queryWithLogicExpire(CACHE_SHOP_KEY,LOCK_SHOP_KEY,this::getById,id,Shop.class,CACHE_SHOP_TTL,TimeUnit.MINUTES);
         Shop shop = cacheClientUtil.queryWithMutex(CACHE_SHOP_KEY,LOCK_SHOP_KEY,id,Shop.class, this::getById,
                 CACHE_NULL_TTL,TimeUnit.MINUTES,CACHE_SHOP_TTL, TimeUnit.MINUTES);
