@@ -1,7 +1,12 @@
 package com.hmdp;
 
+import cn.hutool.core.util.RandomUtil;
+import com.baomidou.mybatisplus.extension.conditions.query.QueryChainWrapper;
 import com.hmdp.entity.Shop;
+import com.hmdp.entity.User;
+import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.impl.ShopServiceImpl;
+import com.hmdp.service.impl.UserServiceImpl;
 import com.hmdp.utils.CacheClientUtil;
 import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.RedisIDWorker;
@@ -10,14 +15,19 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import javax.annotation.Resource;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import static com.hmdp.utils.PasswordEncoder.encode;
+
 @SpringBootTest
 class HmDianPingApplicationTests {
 
+    @Resource
+    UserMapper userMapper;
     @Resource
     ShopServiceImpl shopService;
     @Resource
@@ -26,6 +36,17 @@ class HmDianPingApplicationTests {
     @Resource
     RedisIDWorker redisIDWorker;
 
+    @Test
+    void initPassword(){
+        List<User> list = userMapper.selectList(null);
+        String s = "123456789";
+        for (User user : list) {
+            System.out.println(user);
+            String encodePassword = encode(s);
+            user.setPassword(encodePassword);
+            userMapper.updateById(user);
+        }
+    }
     @Test
     void sendMessage() {
         String phone = "18374894528";

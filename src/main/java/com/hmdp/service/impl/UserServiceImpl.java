@@ -12,18 +12,19 @@ import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.RegexUtils;
-import com.hmdp.utils.SendPhoneMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import static com.hmdp.utils.PasswordEncoder.matches;
 import static com.hmdp.utils.RedisConstants.*;
 import static com.hmdp.utils.SystemConstants.USER_NICK_NAME_PREFIX;
 
@@ -56,17 +57,17 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         //验证码存redis
         stringTemplate.opsForValue().set(LOGIN_CODE_KEY + phone,code,LOGIN_CODE_TTL, TimeUnit.MINUTES);
         //发送
-        boolean sendSuccess = SendPhoneMessage.SendMessage(phone,code);
+        /*boolean sendSuccess = SendPhoneMessage.SendMessage(phone,code);
         if (!sendSuccess){
             log.error("验证码发送操作出现异常");
             return Result.fail("服务器异常,请稍后重新发送验证码");
-        }
+        }*/
         log.debug("发送成功，验证码为{}",code);
         return Result.ok();
     }
 
     @Override
-    public Result login(LoginFormDTO loginForm, HttpSession session) {
+    public Result login(LoginFormDTO loginForm) {
         //校验手机号
         String phone = loginForm.getPhone();
 //        session方式进行校验
@@ -77,24 +78,39 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         if (RegexUtils.isPhoneInvalid(phone)){
             return Result.fail("手机号格式或内容不符");
         }
+        User user;
         //校验验证码
         String code = loginForm.getCode();
-//        session方式进行校验
-//        String validCode = session.getAttribute("code").toString();
-        //通过手机号在redis中获取验证码
-        String validCode = stringTemplate.opsForValue().get(LOGIN_CODE_KEY + phone);
-        if (code == null || !code.equals(validCode)){
-            return Result.fail("验证码错误!");
+        if (code != null){
+            //session方式进行校验
+            //String validCode = session.getAttribute("code").toString();
+            //通过手机号在redis中获取验证码
+            String validCode = stringTemplate.opsForValue().get(LOGIN_CODE_KEY + phone);
+            if (!code.equals(validCode)){
+                return Result.fail("验证码错误!");
+            }
+            //查询用户
+            user = query().eq("phone", phone).one();
+            //判断新老用户
+            if (user == null) {
+                //不存在则创建新用户保存到数据库
+                user = createUserWithPhone(phone);
+            }
+            //存储用户到session
+            //session.setAttribute("user", BeanUtil.copyProperties(user, UserDTO.class));
+        }else{
+            //账号密码登录，密码加盐加密。
+            String password = loginForm.getPassword();
+            if (password == null){
+                return Result.fail("密码不能为空!");
+            }
+            user = query().eq("phone", phone).one();
+            Boolean isMatches = matches(user.getPassword(), password);
+            if (!isMatches){
+                return Result.fail("密码输入错误!");
+            }
         }
-        //查询用户
-        User user = query().eq("phone", phone).one();
-        //判断新老用户
-        if (user == null) {
-            //不存在则创建新用户保存到数据库
-            user = createUserWithPhone(phone);
-        }
-        //存储用户到session
-//        session.setAttribute("user", BeanUtil.copyProperties(user, UserDTO.class));
+
 
         //生成随机token
         String token = UUID.randomUUID().toString(true);
@@ -112,6 +128,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         return Result.ok(token);
     }
 
+    @Override
+    public Result logout(HttpServletRequest request) {
+        String token = request.getHeader("authorization");
+        log.debug(token);
+        stringTemplate.delete(LOGIN_USER_KEY + token);
+        return Result.ok();
+    }
+
     private User createUserWithPhone(String phone) {
 
         User user = new User();
@@ -119,7 +143,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         user.setNickName(USER_NICK_NAME_PREFIX + RandomUtil.randomNumbers(10));
 
         save(user);
-
         return user;
     }
+
 }
